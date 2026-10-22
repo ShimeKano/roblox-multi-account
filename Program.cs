@@ -15,8 +15,8 @@ internal static class Program
 
 internal sealed class MainForm : Form
 {
-    private const string MutexName = "ROBLOX_singletonEvent";
-    private Mutex? _mutex;
+    private const string EventName = "ROBLOX_singletonEvent";
+    private EventWaitHandle? _singletonEvent;
     private readonly Label _status = new();
     private readonly Label _processCount = new();
     private readonly Button _toggle = new();
@@ -50,14 +50,13 @@ internal sealed class MainForm : Form
         root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         Controls.Add(root);
 
-        var heading = new Label
+        root.Controls.Add(new Label
         {
             Text = "Roblox Multi-Client Lite",
             Font = new Font("Segoe UI", 16, FontStyle.Bold),
             AutoSize = true,
             Margin = new Padding(0, 0, 0, 8)
-        };
-        root.Controls.Add(heading);
+        });
 
         _status.AutoSize = true;
         _status.Text = "Multi-instance: OFF";
@@ -67,20 +66,19 @@ internal sealed class MainForm : Form
         _toggle.Text = "Enable multi-instance";
         _toggle.AutoSize = true;
         _toggle.Padding = new Padding(8, 4, 8, 4);
-        _toggle.Click += (_, _) => ToggleMutex();
+        _toggle.Click += (_, _) => ToggleEvent();
         root.Controls.Add(_toggle);
 
         _processCount.AutoSize = true;
         _processCount.Margin = new Padding(0, 12, 0, 8);
         root.Controls.Add(_processCount);
 
-        var urlLabel = new Label
+        root.Controls.Add(new Label
         {
             Text = "Game URL (optional):",
             AutoSize = true,
             Margin = new Padding(0, 4, 0, 4)
-        };
-        root.Controls.Add(urlLabel);
+        });
 
         var urlRow = new FlowLayoutPanel
         {
@@ -98,51 +96,50 @@ internal sealed class MainForm : Form
         urlRow.Controls.Add(_openGame);
         root.Controls.Add(urlRow);
 
-        var note = new Label
+        root.Controls.Add(new Label
         {
-            Text = "Sign in manually in Roblox. This tool does not store credentials and cannot guarantee that the current Roblox build allows five separate clients. Use the same game page in each client; joining the same server must be done through Roblox's normal UI.",
+            Text = "Sign in manually in Roblox. This tool stores no credentials and cannot guarantee that the current Roblox build allows five separate clients. Use Roblox's normal UI to join the same experience/server.",
             AutoSize = true,
             MaximumSize = new Size(470, 0),
             ForeColor = SystemColors.GrayText,
             Margin = new Padding(0, 8, 0, 0)
-        };
-        root.Controls.Add(note);
+        });
 
         _timer.Interval = 1500;
         _timer.Tick += (_, _) => RefreshProcessCount();
         _timer.Start();
         RefreshProcessCount();
-        FormClosing += (_, _) => DisableMutex();
+        FormClosing += (_, _) => DisableEvent();
     }
 
-    private void ToggleMutex()
+    private void ToggleEvent()
     {
-        if (_mutex is not null)
+        if (_singletonEvent is not null)
         {
-            DisableMutex();
+            DisableEvent();
             return;
         }
 
         try
         {
-            // Keep a handle to the named mutex alive while enabled.
-            // This is a compatibility experiment; Roblox may ignore or block it.
-            _mutex = new Mutex(initiallyOwned: false, name: MutexName);
-            _status.Text = "Multi-instance: ON (best-effort)";
+            // Historical multi-instance compatibility technique: keep the named
+            // event object alive. Current Roblox builds may ignore this technique.
+            _singletonEvent = new EventWaitHandle(false, EventResetMode.AutoReset, EventName);
+            _status.Text = "Multi-instance: ON (best-effort; unverified)";
             _toggle.Text = "Disable multi-instance";
         }
         catch (Exception ex)
         {
             _status.Text = $"Could not enable: {ex.Message}";
-            _mutex?.Dispose();
-            _mutex = null;
+            _singletonEvent?.Dispose();
+            _singletonEvent = null;
         }
     }
 
-    private void DisableMutex()
+    private void DisableEvent()
     {
-        _mutex?.Dispose();
-        _mutex = null;
+        _singletonEvent?.Dispose();
+        _singletonEvent = null;
         _status.Text = "Multi-instance: OFF";
         _toggle.Text = "Enable multi-instance";
     }
