@@ -15,8 +15,8 @@ internal static class Program
 
 internal sealed class MainForm : Form
 {
-    private const string EventName = "ROBLOX_singletonEvent";
-    private EventWaitHandle? _singletonEvent;
+    private const string SingletonName = "ROBLOX_singletonEvent";
+    private Mutex? _singletonMutex;
     private readonly Label _status = new();
     private readonly Label _processCount = new();
     private readonly Button _toggle = new();
@@ -66,7 +66,7 @@ internal sealed class MainForm : Form
         _toggle.Text = "Enable multi-instance";
         _toggle.AutoSize = true;
         _toggle.Padding = new Padding(8, 4, 8, 4);
-        _toggle.Click += (_, _) => ToggleEvent();
+        _toggle.Click += (_, _) => ToggleMultiInstance();
         root.Controls.Add(_toggle);
 
         _processCount.AutoSize = true;
@@ -109,37 +109,38 @@ internal sealed class MainForm : Form
         _timer.Tick += (_, _) => RefreshProcessCount();
         _timer.Start();
         RefreshProcessCount();
-        FormClosing += (_, _) => DisableEvent();
+        FormClosing += (_, _) => DisableMultiInstance();
     }
 
-    private void ToggleEvent()
+    private void ToggleMultiInstance()
     {
-        if (_singletonEvent is not null)
+        if (_singletonMutex is not null)
         {
-            DisableEvent();
+            DisableMultiInstance();
             return;
         }
 
         try
         {
-            // Historical multi-instance compatibility technique: keep the named
-            // event object alive. Current Roblox builds may ignore this technique.
-            _singletonEvent = new EventWaitHandle(false, EventResetMode.AutoReset, EventName);
-            _status.Text = "Multi-instance: ON (best-effort; unverified)";
+            // MultiBloxy uses a named Windows Mutex rather than an event object.
+            // Keep the mutex handle alive while multi-instance mode is enabled.
+            // Roblox may still block or ignore this legacy compatibility technique.
+            _singletonMutex = new Mutex(false, SingletonName);
+            _status.Text = "Multi-instance: enabled (Roblox compatibility unverified)";
             _toggle.Text = "Disable multi-instance";
         }
         catch (Exception ex)
         {
-            _status.Text = $"Could not enable: {ex.Message}";
-            _singletonEvent?.Dispose();
-            _singletonEvent = null;
+            _status.Text = $"Could not enable mutex: {ex.Message}";
+            _singletonMutex?.Dispose();
+            _singletonMutex = null;
         }
     }
 
-    private void DisableEvent()
+    private void DisableMultiInstance()
     {
-        _singletonEvent?.Dispose();
-        _singletonEvent = null;
+        _singletonMutex?.Dispose();
+        _singletonMutex = null;
         _status.Text = "Multi-instance: OFF";
         _toggle.Text = "Enable multi-instance";
     }
